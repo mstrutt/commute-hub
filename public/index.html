@@ -1,0 +1,39 @@
+<ul id="status"></ul>
+<pre id="weather"></pre>
+
+<script>
+  const commuteOptions = [
+    'dlr',
+    'jubilee',
+    'northern',
+    'victoria'
+  ];
+
+  const weatherLocation = '44418';
+
+  fetch(`./weather?location=${weatherLocation}`)
+    .then(response => response.json())
+    .then((data) => {
+      const today = data.consolidated_weather[0];
+      document.getElementById('weather').innerHTML = JSON.stringify(today, null, 2);
+    });
+
+  fetch('./tube_status')
+    .then(response => response.json())
+    .then((data) => {
+      document.getElementById('status').innerHTML = data
+        .filter(line => commuteOptions.includes(line.id))
+        .map(line => `
+          <li id="${line.id}">
+            <h3>${line.name} - ${line.modeName}</h3>
+            ${line.lineStatuses.map(status => `
+              <p>
+                ${status.statusSeverityDescription}
+                ${ status.reason ? `<p>${status.reason}</p>` : '' }
+              <p>
+            `).join('')}
+          </li>
+        `)
+        .join('');
+    })
+</script>
