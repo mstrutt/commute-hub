@@ -1,35 +1,27 @@
-require('dotenv').config();
-const express = require('express'); // Express web server framework
-const request = require('request'); // "Request" library
-const cors = require('cors');
-const querystring = require('querystring');
-const cookieParser = require('cookie-parser');
+import cookieParser from 'cookie-parser';
+import cors from 'cors';
+import dotenv from 'dotenv';
+import express from 'express';
+import querystring from 'querystring';
+import request from 'request';
+
+import {
+  fetch,
+  generateRandomString,
+  handleError
+} from './util';
+
+dotenv.config();
 
 const port = process.env.PORT || '8888';
 const client_id = process.env.STRAVA_CLIENT_ID;
 const client_secret = process.env.STRAVA_CLIENT_SECRET;
 const redirect_uri = `http://localhost:${port}/callback`; // Your redirect uri
-
-/**
- * Generates a random string containing numbers and letters
- * @param  {number} length The length of the string
- * @return {string} The generated string
- */
-var generateRandomString = function(length) {
-  var text = '';
-  var possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-
-  for (var i = 0; i < length; i++) {
-    text += possible.charAt(Math.floor(Math.random() * possible.length));
-  }
-  return text;
-};
-
 const stateKey = 'strava_auth_state';
 
 const app = express();
 
-app.use(express.static(__dirname + '/public'))
+app.use(express.static('./public'))
    .use(cors())
    .use(cookieParser());
 
@@ -77,10 +69,6 @@ app.get('/callback', function(req, res) {
       },
       json: true
     };
-
-    console.log(`CODE: ${code}`);
-
-    // console.log(authOptions);
 
     request.post(authOptions, function(error, response, body) {
       if (!error && response.statusCode === 200) {
@@ -196,29 +184,6 @@ function stravaFetch(url, options={}, refresh_token=null) {
           });
         });
     });
-}
-
-function fetch(url, options={}) {
-  return new Promise((resolve, reject) => {
-    request.get({
-      url,
-      ...options
-    }, (error, response) => {
-      if (error || response.statusCode >= 400) {
-        reject(response);
-        return;
-      }
-      resolve(response.body);
-    });
-  });
-}
-
-function handleError(res) {
-  return (err) => {
-    // console.log(err);
-    res.statusCode = 500;
-    res.send(JSON.stringify(err));
-  };
 }
 
 console.log(`Listening on ${port}`);
