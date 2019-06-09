@@ -4,7 +4,8 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "start": "node --experimental-modules ./server/index.mjs"
+    "start": "node --experimental-modules ./server/index.mjs",
+    "develop": "parcel watch app/index.html"
   },
   "repository": {
     "type": "git",
@@ -23,5 +24,9 @@
     "express": "^4.17.0",
     "querystring": "^0.2.0",
     "request": "^2.88.0"
+  },
+  "devDependencies": {
+    "parcel": "^1.12.3",
+    "sass": "^1.21.0"
   }
 }

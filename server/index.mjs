@@ -21,7 +21,7 @@ const stateKey = 'strava_auth_state';
 
 const app = express();
 
-app.use(express.static('./public'))
+app.use(express.static('./dist'))
    .use(cors())
    .use(cookieParser());
 
