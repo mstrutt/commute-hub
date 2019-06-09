@@ -17,6 +17,11 @@
     border-radius: 50%;
     float: left;
     margin-right: 16px;
+
+    &--tfl {
+      margin-left: -5px;
+      margin-right: 11px;
+    }
   }
 
   &__title {
