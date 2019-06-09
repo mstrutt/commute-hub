@@ -72,7 +72,7 @@ export class StravaFeed {
       const time = date.toLocaleTimeString().split(':').slice(0, 2).join(':')
       return `<li class="card">
         <div class="card__header">
-          <img class="card__avatar" src="${athlete.profile_medium}" height="40" width="40" alt="${name} " />
+          <img class="card__avatar card__avatar--round" src="${athlete.profile_medium}" height="40" width="40" alt="${name} " />
           <h3 class="card__title">${activity.name}</h3>
           <p class="card__subtitle">${date.toDateString()} at ${time}</p>
         </div>
