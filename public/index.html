@@ -1,5 +1,12 @@
+<link rel="stylesheet" href="./index.css" />
+
+<p>
+  <a href="/login">Login</a>
+</p>
+
 <ul id="status"></ul>
 <pre id="weather"></pre>
+<ul id="strava"></ul>
 
 <script>
   const commuteOptions = [
@@ -35,5 +42,73 @@
           </li>
         `)
         .join('');
-    })
+    });
+  
+  const accessMatch = window.location.hash.match(/access_token=([^&]+)(&|$)/);
+  const access_token = accessMatch && accessMatch[1];
+  const refreshMatch = window.location.hash.match(/refresh_token=([^&]+)(&|$)/);
+  const refresh_token = refreshMatch && refreshMatch[1];
+  fetch(`./strava?access_token=${access_token}&refresh_token=${refresh_token}`)
+    .then(response => response.json())
+    .then((data) => {
+      document.getElementById('strava').innerHTML = data.activities.slice(0, 3).map((activity) => {
+        const name = `${data.athlete.firstname} ${data.athlete.lastname}`;
+        const date = new Date(activity.start_date_local);
+        const time = date.toLocaleTimeString().split(':').slice(0, 2).join(':')
+        return `<li class="card">
+          <div class="card__header">
+            <img class="card__avatar" src="${data.athlete.profile_medium}" height="40" width="40" alt="${name} " />
+            <h3 class="card__title">${activity.name}</h3>
+            <p class="card__subtitle">${date.toDateString()} at ${time}</p>
+          </div>
+          ${(activity.map.summary_polyline ? `<img class="card__map" src="${getMapUrl(activity.map, 600, 338)}" alt="Map of ${activity.name}" height="338" widht="600" />` : '')}
+          <div class="card__detail">
+            <p class="card__description">
+              ${activity.type}:
+              Distance: ${formatDistance(activity.distance)}
+              Elevation: ${formatDistance(activity.total_elevation_gain)}
+              Time: ${formatTime(activity.moving_time)}
+            </p>
+            <ul class="card__actions">
+              <li>Kudos: ${activity.kudos_count}</li>
+              <li>Comments: ${activity.comment_count}</li>
+              <li>Trophies: ${activity.achievement_count}</li>
+            </ul>
+          </div>
+        </li>`;
+      }).join('');
+    });
+
+  function formatTime(time) {
+    const parts = [];
+    const hours = Math.floor(time / (60 * 60));
+    if (hours > 0) {
+      parts.push(`${hours}h`);
+    }
+    const minutes = Math.floor(time / 60) % 60;
+    if (hours > 0 || minutes > 0) {
+      parts.push(`${minutes}m`);
+    }
+    const seconds = time % 60;
+    parts.push(`${seconds}s`);
+    return parts.join(' ');
+  }
+
+  function formatDistance(distance) {
+    if (distance < 1000) {
+      return `${distance}m`;
+    }
+    return `${(Math.round(distance / 100) / 10).toFixed(1)}km`
+  }
+
+  function getMapUrl(polymap, x, y) {
+    const urlMatch = window.location.hash.match(/maps_key=([^&]+)(&|$)/);
+    const maps_key = urlMatch && urlMatch[1];
+    const params = new URLSearchParams({
+      key: maps_key,
+      size: `${x},${y}@2x`,
+      shape: `border:DD3333|weight:3|cmp|enc:${polymap.summary_polyline}`
+    });
+    return `https://open.mapquestapi.com/staticmap/v5/map?${params.toString()}`
+  }
 </script>

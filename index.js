@@ -1,22 +1,14 @@
-/**
- * This is an example of a basic node.js script that performs
- * the Authorization Code oAuth2 flow to authenticate against
- * the Spotify Accounts.
- *
- * For more information, read
- * https://developer.spotify.com/web-api/authorization-guide/#authorization_code_flow
- */
-
 require('dotenv').config();
-var express = require('express'); // Express web server framework
-var request = require('request'); // "Request" library
-var cors = require('cors');
-var querystring = require('querystring');
-var cookieParser = require('cookie-parser');
+const express = require('express'); // Express web server framework
+const request = require('request'); // "Request" library
+const cors = require('cors');
+const querystring = require('querystring');
+const cookieParser = require('cookie-parser');
 
-var client_id = 'CLIENT_ID'; // Your client id
-var client_secret = 'CLIENT_SECRET'; // Your secret
-var redirect_uri = 'REDIRECT_URI'; // Your redirect uri
+const port = process.env.PORT || '8888';
+const client_id = process.env.STRAVA_CLIENT_ID;
+const client_secret = process.env.STRAVA_CLIENT_SECRET;
+const redirect_uri = `http://localhost:${port}/callback`; // Your redirect uri
 
 /**
  * Generates a random string containing numbers and letters
@@ -33,9 +25,9 @@ var generateRandomString = function(length) {
   return text;
 };
 
-var stateKey = 'spotify_auth_state';
+const stateKey = 'strava_auth_state';
 
-var app = express();
+const app = express();
 
 app.use(express.static(__dirname + '/public'))
    .use(cors())
@@ -43,12 +35,12 @@ app.use(express.static(__dirname + '/public'))
 
 app.get('/login', function(req, res) {
 
-  var state = generateRandomString(16);
+  const state = generateRandomString(16);
   res.cookie(stateKey, state);
 
   // your application requests authorization
-  var scope = 'user-read-private user-read-email';
-  res.redirect('https://accounts.spotify.com/authorize?' +
+  const scope = 'read_all,activity:read_all';
+  res.redirect('https://www.strava.com/oauth/authorize?' +
     querystring.stringify({
       response_type: 'code',
       client_id: client_id,
@@ -75,17 +67,20 @@ app.get('/callback', function(req, res) {
   } else {
     res.clearCookie(stateKey);
     var authOptions = {
-      url: 'https://accounts.spotify.com/api/token',
+      url: 'https://www.strava.com/oauth/token',
       form: {
         code: code,
         redirect_uri: redirect_uri,
-        grant_type: 'authorization_code'
-      },
-      headers: {
-        'Authorization': 'Basic ' + (new Buffer(client_id + ':' + client_secret).toString('base64'))
+        grant_type: 'authorization_code',
+        client_id: client_id,
+        client_secret: client_secret
       },
       json: true
     };
+
+    console.log(`CODE: ${code}`);
+
+    // console.log(authOptions);
 
     request.post(authOptions, function(error, response, body) {
       if (!error && response.statusCode === 200) {
@@ -93,22 +88,12 @@ app.get('/callback', function(req, res) {
         var access_token = body.access_token,
             refresh_token = body.refresh_token;
 
-        var options = {
-          url: 'https://api.spotify.com/v1/me',
-          headers: { 'Authorization': 'Bearer ' + access_token },
-          json: true
-        };
-
-        // use the access token to access the Spotify Web API
-        request.get(options, function(error, response, body) {
-          console.log(body);
-        });
-
         // we can also pass the token to the browser to make requests from there
         res.redirect('/#' +
           querystring.stringify({
             access_token: access_token,
-            refresh_token: refresh_token
+            refresh_token: refresh_token,
+            maps_key: process.env.MAP_QUEST_CONSUMER_KEY
           }));
       } else {
         res.redirect('/#' +
@@ -121,27 +106,29 @@ app.get('/callback', function(req, res) {
 });
 
 app.get('/refresh_token', function(req, res) {
-
   // requesting access token from refresh token
   var refresh_token = req.query.refresh_token;
-  var authOptions = {
-    url: 'https://accounts.spotify.com/api/token',
-    headers: { 'Authorization': 'Basic ' + (new Buffer(client_id + ':' + client_secret).toString('base64')) },
-    form: {
-      grant_type: 'refresh_token',
-      refresh_token: refresh_token
-    },
+  refreshStravaToken(refresh_token)
+    .then(access_token => res.send({ access_token }))
+    .catch(handleError(res));
+});
+
+app.get('/strava', function(req, res) {
+  const { access_token, refresh_token } = req.query;
+  const authOptions = {
+    headers: { 'Authorization': 'Bearer ' + access_token },
     json: true
   };
-
-  request.post(authOptions, function(error, response, body) {
-    if (!error && response.statusCode === 200) {
-      var access_token = body.access_token;
-      res.send({
-        'access_token': access_token
-      });
-    }
-  });
+  Promise.all([
+    stravaFetch(`https://strava.com/api/v3/athlete?access_token=${access_token}`, authOptions, refresh_token),
+    stravaFetch(`https://strava.com/api/v3/athlete/activities?access_token=${access_token}`, authOptions, refresh_token)
+  ]).then(([athlete, activities]) => {
+    res.send(JSON.stringify({
+      athlete,
+      activities
+    }));
+  })
+  .catch(handleError(res));
 });
 
 app.get('/tube_status', function(req, res) {
@@ -150,18 +137,89 @@ app.get('/tube_status', function(req, res) {
     app_key: process.env.TFL_APP_KEY
   });
   const url = `https://api.tfl.gov.uk/line/mode/tube,overground,dlr,tflrail/status?${query}`;
-  request.get({ url }, function(error, response, body) {
-    res.send(body);
-  });
+  fetch(url)
+    .then(body => res.send(body))
+    .catch(handleError(res));
 });
 
 app.get('/weather', function(req, res) {
   const weatherLocation = req.query.location;
   const url = `https://www.metaweather.com/api/location/${weatherLocation}/`;
-  request.get({ url }, function(error, response, body) {
-    res.send(body);
-  });
+  fetch(url)
+    .then(body => res.send(body))
+    .catch(handleError(res));
 });
 
-console.log('Listening on 8888');
-app.listen(8888);
+function refreshStravaToken(refresh_token) {
+  console.log('Attempting to refresh token...', refresh_token);
+  var authOptions = {
+    url: 'https://www.strava.com/oauth/token',
+    form: {
+      grant_type: 'refresh_token',
+      refresh_token: refresh_token,
+      client_id: client_id,
+      client_secret: client_secret,
+    },
+    json: true
+  };
+
+  return new Promise((resolve, reject) => {
+    request.post(authOptions, function(error, response, body) {
+      if (!error && response.statusCode === 200 && body.access_token) {
+        console.log(`Refresh successful: ${body.access_token}`)
+        resolve(body.access_token);
+        return;
+      }
+      console.log('Refresh attempt failed');
+      reject(response);
+    });
+  });
+}
+
+function stravaFetch(url, options={}, refresh_token=null) {
+  return fetch(url, options)
+    .catch((err) => {
+      if (err.statusCode !== 401 || !refresh_token) {
+        return Promise.reject(err);
+      }
+
+      return refreshStravaToken(refresh_token)
+        .then((access_token) => {
+          const newUrl = url.replace(/access_token=[^&]+/, `access_token=${access_token}`);
+          const newHeaders = {
+            ...options.headers,
+            'Authorization': `Bearer ${access_token}`
+          };
+          return fetch(newUrl, {
+            ...options,
+            headers: newHeaders
+          });
+        });
+    });
+}
+
+function fetch(url, options={}) {
+  return new Promise((resolve, reject) => {
+    request.get({
+      url,
+      ...options
+    }, (error, response) => {
+      if (error || response.statusCode >= 400) {
+        reject(response);
+        return;
+      }
+      resolve(response.body);
+    });
+  });
+}
+
+function handleError(res) {
+  return (err) => {
+    // console.log(err);
+    res.statusCode = 500;
+    res.send(JSON.stringify(err));
+  };
+}
+
+console.log(`Listening on ${port}`);
+app.listen(port);
