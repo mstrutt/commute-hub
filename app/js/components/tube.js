@@ -16,60 +16,78 @@ export const colourMap = {
   'northern': 'rgb(0, 0, 0)',
 };
 
+export const LS_KEY = 'tube-lines';
+
 export class TubeStatus {
   constructor(element) {
     this.element = element;
-    this.commuteOptions = [
-      'dlr',
-      'jubilee',
-      'northern',
-      'victoria'
-    ];
+    this.commuteOptions = [];
+    this.update = this.update.bind(this);
+    this.lines = [];
     this.init();
   }
 
   init() {
+    this.getChecked();
     this.fetchData();
+  }
+
+  update() {
+    this.getChecked();
+    this.render();
+  }
+
+  getChecked() {
+    const data = window.localStorage.getItem(LS_KEY);
+    if (!data) {
+      return;
+    }
+    const parsed = JSON.parse(data);
+    if (!Array.isArray(parsed)) {
+      return;
+    }
+    this.commuteOptions = parsed;
   }
 
   fetchData() {
     fetch('./tube_status')
       .then(response => response.json())
       .then((data) => {
-        const filteredData = data
-          // .filter(line => this.commuteOptions.includes(line.id));
-        this.render(filteredData);
+        this.lines = data;
+        this.render();
       });
   }
 
-  render(lines) {
-    this.element.innerHTML = lines.map(line => {
-      const primaryStatus = line.lineStatuses[0].statusSeverityDescription;
-      const detailedStatus = line.lineStatuses
-        .filter((status, i) => i > 0 || status.reason);
-      return `
-        <li class="card" id="${line.id}" style="border-bottom: 8px solid ${colourMap[line.id]}">
-          <div class="card__header">
-            <img class="card__avatar card__avatar--tfl" src="./logos/${line.modeName}.svg" alt="${line.modeName}" width="50" height="40" />
-            <h3 class="card__title">${line.name}</h3>
-            <p class="card__subtitle">${primaryStatus}</p>
-          </div>
-          ${(() => {
-            if (!detailedStatus.length) {
-              return '';
-            }
-            return `<div class="card__detail">
-              ${detailedStatus.map(status => `
-                <p class="card__description">
-                  ${status.statusSeverityDescription}
-                  ${ status.reason ? `- ${status.reason}` : '' }
-                <p>
-              `).join('')}
-            </div>`;
-          })()}
-        </li>
-      `;
-    })
-    .join('');
+  render() {
+    this.element.innerHTML = this.lines
+      .filter(line => this.commuteOptions.includes(line.id) || !this.commuteOptions.length)
+      .map(line => {
+        const primaryStatus = line.lineStatuses[0].statusSeverityDescription;
+        const detailedStatus = line.lineStatuses
+          .filter((status, i) => i > 0 || status.reason);
+        return `
+          <li class="card" id="${line.id}" style="border-bottom: 8px solid ${colourMap[line.id]}">
+            <div class="card__header">
+              <img class="card__avatar card__avatar--tfl" src="./logos/${line.modeName}.svg" alt="${line.modeName}" width="50" height="40" />
+              <h3 class="card__title">${line.name}</h3>
+              <p class="card__subtitle">${primaryStatus}</p>
+            </div>
+            ${(() => {
+              if (!detailedStatus.length) {
+                return '';
+              }
+              return `<div class="card__detail">
+                ${detailedStatus.map(status => `
+                  <p class="card__description">
+                    ${status.statusSeverityDescription}
+                    ${ status.reason ? `- ${status.reason}` : '' }
+                  <p>
+                `).join('')}
+              </div>`;
+            })()}
+          </li>
+        `;
+      })
+      .join('');
   }
 }
